@@ -108,6 +108,17 @@
     const lock = () => { if (IS_TOUCH && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); };
     if (r && r.then) r.then(lock).catch(() => {}); else lock();
   }
+  /* Android: ao iniciar a fase (toque do jogador = gesto permitido) entra em tela cheia e trava na horizontal.
+     No iPhone não existe essa API: segue valendo o aviso "gire o celular". */
+  function enterLandscapeFullscreen() {
+    if (!IS_TOUCH || !fsReq) return;
+    if (document.fullscreenElement || document.webkitFullscreenElement) return;
+    try {
+      const r = fsReq.call(fsRoot);
+      const lock = () => { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); };
+      if (r && r.then) r.then(lock).catch(() => {}); else lock();
+    } catch (_) {}
+  }
   /* iPhone/Safari não oferece tela cheia para páginas: esconde o botão em vez de deixá-lo morto */
   if (!fsReq) $('#btn-fullscreen').style.display = 'none';
 
@@ -140,6 +151,7 @@
 
   /* ---------- jogo ---------- */
   function startGame(levelIndex) {
+    enterLandscapeFullscreen();
     if (game) game.stop();
     game = new Game($('#game-canvas'), onGameEnd);
     touchDir.l = touchDir.r = false; autoPaused = false;
