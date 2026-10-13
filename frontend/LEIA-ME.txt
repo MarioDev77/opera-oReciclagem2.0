@@ -58,3 +58,13 @@ CELULAR / TELA RESPONSIVA
   js/game.js (largura lógica dinâmica, DPR, HUD escalável).
 - Dica iPhone: "Compartilhar > Adicionar à Tela de Início" abre o jogo sem
   as barras do Safari (o iPhone não tem tela cheia para páginas web).
+
+SEGURANÇA
+---------
+- Jogo 100% estático (sem backend, banco, contas ou dependências npm).
+- CSP (meta em index.html + cabeçalhos em vercel.json), nosniff, HSTS,
+  Referrer-Policy, Permissions-Policy e proteção contra frames.
+  Se o jogo for incorporado em iframe de OUTRO domínio, ajuste frame-ancestors.
+- Dados do localStorage são validados ao carregar (tipos e limites).
+- O ranking e o progresso são LOCAIS e editáveis pelo próprio jogador:
+  não são à prova de trapaça. Ranking global exigiria backend com validação.

@@ -8,6 +8,7 @@ const Storage = {
     try {
       this.data = JSON.parse(localStorage.getItem(this.KEY)) || {};
     } catch (e) { this.data = {}; }
+    if (!this.data || typeof this.data !== 'object' || Array.isArray(this.data)) this.data = {};
     this.data.settings = this.data.settings || { sound:true, name:'' };
     this.data.progress = this.data.progress || { unlocked:1, stars:{} };
     this.data.rewards  = this.data.rewards || { eco:0, claimed:{} };
@@ -20,9 +21,28 @@ const Storage = {
       .filter(e => e && typeof e.score === 'number' && isFinite(e.score) && e.score >= 0)
       .map(e => ({ name: this.cleanName(e.name), score: Math.floor(e.score), level: Math.min(9, Math.max(1, e.level | 0 || 1)), date: e.date || 0 }))
       .sort((a, b) => b.score - a.score).slice(0, 10);
+    this._sanitize();
     /* quem já venceu a fase 8 ganha a fase 9 (Crisópolis) liberada */
     if (this.data.progress.stars && this.data.progress.stars[8] && this.data.progress.unlocked < 9) this.data.progress.unlocked = 9;
     return this.data;
+  },
+
+  /* localStorage é editável pelo próprio jogador (e por qualquer script na mesma origem):
+     força tipos e limites para que dados adulterados/corrompidos nunca quebrem a interface */
+  _sanitize() {
+    const d = this.data, int = (v, lo, hi, def) => { v = Math.floor(Number(v)); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def; };
+    const st = (d.settings && typeof d.settings === 'object') ? d.settings : {};
+    d.settings = { sound: st.sound !== false, name: typeof st.name === 'string' && st.name ? this.cleanName(st.name) : '' };
+    const pr = (d.progress && typeof d.progress === 'object') ? d.progress : {};
+    const stars = {};
+    if (pr.stars && typeof pr.stars === 'object') for (let i = 1; i <= 9; i++) { const v = int(pr.stars[i], 0, 3, 0); if (v) stars[i] = v; }
+    d.progress = { unlocked: int(pr.unlocked, 1, 9, 1), stars };
+    const rw = (d.rewards && typeof d.rewards === 'object') ? d.rewards : {};
+    const claimed = {};
+    if (rw.claimed && typeof rw.claimed === 'object') Object.keys(rw.claimed).forEach(k => { if (/^(mission_[1-9]|ach_[a-z0-9]{1,12})$/.test(k) && rw.claimed[k] === true) claimed[k] = true; });
+    d.rewards = { eco: int(rw.eco, 0, 100000, 0), claimed };
+    const t = (d.totals && typeof d.totals === 'object') ? d.totals : {};
+    d.totals = { hits: int(t.hits, 0, 1e7, 0), wins: int(t.wins, 0, 1e7, 0), plays: int(t.plays, 0, 1e7, 0) };
   },
 
   save() {
