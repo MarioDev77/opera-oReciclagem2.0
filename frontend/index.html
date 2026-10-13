@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Operação Reciclagem Crisoverde</title>
+<link rel="stylesheet" href="style/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ TELA INICIAL ============ -->
+  <section id="screen-menu" class="screen active">
+    <div class="menu-bg"></div>
+    <div class="menu-particles"><span style="--i:0"></span><span style="--i:1"></span><span style="--i:2"></span><span style="--i:3"></span><span style="--i:4"></span><span style="--i:5"></span><span style="--i:6"></span><span style="--i:7"></span><span style="--i:8"></span><span style="--i:9"></span><span style="--i:10"></span><span style="--i:11"></span><span style="--i:12"></span><span style="--i:13"></span><span style="--i:14"></span><span style="--i:15"></span></div>
+    <img class="menu-char left" src="assets/sprites/crisoman_idle.png" alt="Crisoman">
+    <img class="menu-char right" src="assets/sprites/crisogril_idle.png" alt="Crisogril">
+    <div class="menu-panel">
+      <div class="logo">
+        <div class="logo-recycle">&#9851;</div>
+        <h1>OPERAÇÃO</h1>
+        <h2>RECICLAGEM</h2>
+        <h3>CRISOVERDE</h3>
+      </div>
+      <button id="btn-play" class="btn btn-big">&#9654; JOGAR</button>
+      <div class="diff-label">SELECIONE A DIFICULDADE</div>
+      <div class="diff-group">
+        <button class="btn btn-diff" data-diff="easy">FÁCIL</button>
+        <button class="btn btn-diff selected" data-diff="medium">MÉDIO</button>
+        <button class="btn btn-diff" data-diff="hard">DIFÍCIL</button>
+      </div>
+      <div class="menu-row">
+        <button id="btn-howto" class="btn btn-small">&#10067; COMO JOGAR</button>
+        <button id="btn-achv" class="btn btn-small">&#127942; CONQUISTAS</button>
+        <button id="btn-fullscreen" class="btn btn-icon" title="Tela cheia">&#9974;</button>
+        <button id="btn-sound" class="btn btn-icon" title="Som">&#128266;</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SELEÇÃO DE FASES ============ -->
+  <section id="screen-levels" class="screen">
+    <div class="panel wide">
+      <h2 class="panel-title">FASES</h2>
+      <p class="panel-sub">Complete cada fase e ajude a natureza!</p>
+      <div id="levels-grid" class="levels-grid"></div>
+      <button class="btn btn-back" data-goto="menu">&#8592; VOLTAR</button>
+    </div>
+  </section>
+
+  <!-- ============ CONQUISTAS E MISSÕES ============ -->
+  <section id="screen-achv" class="screen">
+    <div class="panel wide">
+      <h2 class="panel-title">CONQUISTAS</h2>
+      <p class="panel-sub">Eco-pontos: <b id="eco-total" style="color:#ffd54f">0</b></p>
+      <h3 class="achv-h">MISSÕES DAS FASES</h3>
+      <div id="mission-list" class="achv-grid"></div>
+      <h3 class="achv-h">CONQUISTAS</h3>
+      <div id="achv-list" class="achv-grid"></div>
+      <button class="btn btn-back" data-goto="menu">&#8592; VOLTAR</button>
+    </div>
+  </section>
+
+  <!-- ============ COMO JOGAR ============ -->
+  <section id="screen-howto" class="screen">
+    <div class="panel">
+      <h2 class="panel-title">COMO JOGAR</h2>
+      <div class="howto-body">
+        <p>&#9658; <b>ARRASTE</b> com o mouse ou o dedo os resíduos que caem e <b>solte sobre a lixeira correta</b>.</p>
+        <p>&#9658; No teclado, use <b>&#8592; &#8594;</b> (ou A / D) para mover a garra e <b>ESPAÇO</b> para pegar / soltar na lixeira.</p>
+        <p>&#9658; Lixeira certa = <b class="ok">pontos + combo</b>. Lixeira errada = <b class="bad">penalidade</b>.</p>
+        <p>&#9658; Resíduo reciclável que cai no chão = erro. <b>Não toque</b> em orgânicos, lixo comum nem baterias!</p>
+        <p>&#9658; <b>Não toque</b> em orgânicos, lixo comum nem baterias: eles tiram vidas!</p>
+        <p>&#9658; Itens especiais: &#9200; tempo, &#11088; pontos, &#128737; escudo, &#129522; ímã, &#127807; bônus x2.</p>
+        <p>&#9658; Cada fase tem uma <b>mecânica própria</b> (vento, correnteza, rodízio, gelo, maré, miragem, sequência, poluição e os ventos de Crisópolis). Leia a dica no início!</p>
+        <p>&#9658; Cumpra a <b>missão da fase</b> e desbloqueie <b>conquistas</b> para ganhar eco-pontos.</p>
+        <p>&#9658; <b>P</b> pausa &nbsp; <b>R</b> reinicia &nbsp; <b>ENTER</b> começa.</p>
+        <div class="howto-bins">
+          <span><img src="assets/sprites/bin_metal.png"> Metal</span>
+          <span><img src="assets/sprites/bin_plastic.png"> Plástico</span>
+          <span><img src="assets/sprites/bin_glass.png"> Vidro</span>
+          <span><img src="assets/sprites/bin_paper.png"> Papel</span>
+        </div>
+      </div>
+      <button class="btn btn-back" data-goto="menu">&#8592; VOLTAR</button>
+    </div>
+  </section>
+
+  <!-- ============ JOGO ============ -->
+  <section id="screen-game" class="screen">
+    <div id="game-wrap">
+      <canvas id="game-canvas" width="1280" height="720"></canvas>
+      <button id="btn-pause-dom" class="btn btn-pause-dom" title="Pausar (P)">&#10074;&#10074;</button>
+      <div id="mobile-controls">
+        <button id="mc-left" class="mc-btn">&#9664;</button>
+        <button id="mc-drop" class="mc-btn mc-drop">&#8681;</button>
+        <button id="mc-right" class="mc-btn">&#9654;</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PAUSA ============ -->
+  <div id="overlay-pause" class="overlay">
+    <div class="panel pause-panel">
+      <h2 class="panel-title">&#10074;&#10074; PAUSADO</h2>
+      <button id="btn-resume" class="btn btn-big">&#9654; CONTINUAR</button>
+      <button id="btn-restart" class="btn">&#8635; REINICIAR FASE</button>
+      <button id="btn-quit" class="btn">&#8962; MENU PRINCIPAL</button>
+      <p class="hint">Pressione ESC para continuar</p>
+    </div>
+  </div>
+
+  <!-- ============ RESULTADO ============ -->
+  <section id="screen-results" class="screen">
+    <div class="panel">
+      <h2 id="res-title" class="panel-title">FASE CONCLUÍDA!</h2>
+      <div id="res-stars" class="stars"></div>
+      <div class="res-grid">
+        <div class="res-stat"><span>PONTOS</span><b id="res-score">0</b></div>
+        <div class="res-stat"><span>ACERTOS</span><b id="res-hits">0</b></div>
+        <div class="res-stat"><span>ERROS</span><b id="res-miss">0</b></div>
+        <div class="res-stat"><span>COMBO MÁX</span><b id="res-combo">x0</b></div>
+        <div class="res-stat"><span>TEMPO</span><b id="res-time">0:00</b></div>
+        <div class="res-stat"><span>FASE</span><b id="res-level">1</b></div>
+      </div>
+      <p id="res-fact" class="res-fact"></p>
+      <div id="res-rewards" class="res-rewards"></div>
+      <div id="ranking-box" class="ranking-box">
+        <h3>RANKING</h3>
+        <div id="rank-save" class="rank-save">
+          <input id="rank-name" maxlength="14" placeholder="Seu nome">
+          <button id="btn-save-score" class="btn btn-small">SALVAR</button>
+        </div>
+        <table id="rank-table"><thead><tr><th>POS</th><th>NOME</th><th>PONTOS</th><th>FASE</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="res-btns">
+        <button id="btn-next" class="btn btn-big">PRÓXIMA FASE &#8594;</button>
+        <button id="btn-replay" class="btn">&#8635; JOGAR NOVAMENTE</button>
+        <button id="btn-menu2" class="btn">&#8962; MENU</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<script src="js/config.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/achievements.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

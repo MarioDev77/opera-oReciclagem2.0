@@ -1,0 +1,44 @@
+OPERAÇÃO RECICLAGEM CRISOVERDE
+==============================
+
+COMO EXECUTAR LOCALMENTE
+------------------------
+1. Extraia o arquivo ZIP.
+2. Abra a pasta "OperacaoReciclagemCrisoverde".
+3. Dê dois cliques em "index.html" (funciona direto no navegador,
+   sem servidor e sem internet). Recomendado: Chrome, Edge ou Firefox.
+
+Se preferir servir localmente:  npx serve .   ou   python -m http.server
+
+CONTROLES
+---------
+- A / D ou setas ← → : mover o personagem
+- ESPAÇO / ENTER     : depositar o resíduo na lixeira (e começar)
+- P / ESC            : pausar
+- R                  : reiniciar a fase
+- Celular/tablet     : botões na tela (◀ ▼ ▶)
+
+O JOGO
+------
+- 9 fases temáticas desbloqueáveis (Floresta, Rio, Cidade, Montanha,
+  Praia, Deserto, Metrópole, Planeta Crisoverde e Crisópolis).
+- Cada fase tem piso e efeitos próprios; ao errar, o jogo explica o porquê
+  (dica na tela) e, no fim da fase, mostra uma curiosidade "Você sabia?".
+- 3 dificuldades (Fácil / Médio / Difícil).
+- 10 materiais recicláveis, 4 lixeiras coloridas, 5 itens especiais
+  (relógio, estrela, escudo, ímã, bônus x2) e resíduo perigoso (bateria).
+- Sistema de combo, multiplicador, partículas, efeitos sonoros,
+  pause real, ranking local (top 10) e progresso salvo no navegador.
+
+RECURSOS
+--------
+Todos os sprites (personagens, lixeiras, materiais, itens) e os 8
+cenários foram gerados como PNG/JPG em assets/ — não há arquivos
+externos nem dependências de rede. Os efeitos sonoros são sintetizados
+em tempo real via WebAudio.
+
+
+MODO TESTE
+----------
+Abra js/config.js: com unlockAll:true todas as fases ficam liberadas para teste
+(usuário "JM (TESTE)"). Antes de publicar, troque para unlockAll:false.
