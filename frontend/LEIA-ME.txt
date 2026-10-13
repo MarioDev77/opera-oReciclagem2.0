@@ -16,7 +16,8 @@ CONTROLES
 - ESPAÇO / ENTER     : depositar o resíduo na lixeira (e começar)
 - P / ESC            : pausar
 - R                  : reiniciar a fase
-- Celular/tablet     : botões na tela (◀ ▼ ▶)
+- Celular/tablet     : ◀ ▶ no canto inferior esquerdo, ⇩ (pegar/soltar) no direito;
+                       ou arraste o resíduo com o dedo até a lixeira
 
 O JOGO
 ------
@@ -42,3 +43,18 @@ MODO TESTE
 ----------
 Abra js/config.js: com unlockAll:true todas as fases ficam liberadas para teste
 (usuário "JM (TESTE)"). Antes de publicar, troque para unlockAll:false.
+
+
+CELULAR / TELA RESPONSIVA
+-------------------------
+- Jogue com o celular DEITADO (horizontal). Na vertical aparece o aviso
+  "GIRE O CELULAR" e a partida fica pausada; ao girar ela continua sozinha.
+- O jogo usa toda a área visível: o cenário se estende nas laterais
+  (altura lógica fixa 720; largura lógica de 1280 até 1800). O campo de jogo
+  (lixeiras, queda dos resíduos) continua com os mesmos 1280 centralizados.
+- Respeita áreas seguras do iPhone (notch / barra home) via env(safe-area-inset-*).
+- Arquivos: index.html (viewport-fit=cover, controles, aviso de giro),
+  style/style.css, js/main.js (layout, orientação, pointer events) e
+  js/game.js (largura lógica dinâmica, DPR, HUD escalável).
+- Dica iPhone: "Compartilhar > Adicionar à Tela de Início" abre o jogo sem
+  as barras do Safari (o iPhone não tem tela cheia para páginas web).

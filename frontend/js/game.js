@@ -1,5 +1,10 @@
 /* ===== Motor do jogo — mecânica de arrastar e direcionar ===== */
-const W = 1280, H = 720;
+/* Mundo lógico: altura fixa (720) e largura DINÂMICA (1280 .. MAX_W).
+   O campo de jogo (lixeiras, queda dos resíduos, jogador) continua com os
+   mesmos 1280 de largura, centralizado; a largura extra vira “laterais” do
+   cenário onde ficam HUD e botões de toque. Assim a jogabilidade não muda. */
+const BASE_W = 1280, H = 720, MAX_W = 1800;
+let W = BASE_W;
 
 class Game {
   constructor(canvas, onEnd) {
@@ -11,6 +16,47 @@ class Game {
     this.paused = false;
     this._timers = [];
     this._onKeyDown = null; this._onKeyUp = null;
+    /* layout responsivo (preenchido por applyLayout) */
+    this.cssScale = 1; this.pxScale = 1; this.hudK = 1; this.touchUI = false;
+    this.safe = { l: 0, r: 0, t: 0, b: 0 };
+  }
+
+  get offX() { return (W - BASE_W) / 2; }
+
+  /* tamanho CSS do jogo e largura lógica para uma janela vw x vh:
+     - mais larga que 16:9 → o cenário se estende nas laterais (até MAX_W);
+     - além de MAX_W → barras laterais mínimas; mais estreita que 16:9 → barras acima/abaixo */
+  static computeLayout(vw, vh) {
+    const minA = BASE_W / H, maxA = MAX_W / H, aspect = vw / vh;
+    const a = Math.max(minA, Math.min(maxA, aspect));
+    const cssH = aspect >= minA ? vh : vw / minA;
+    return { logicalW: Math.round(H * a), cssW: Math.min(vw, Math.round(cssH * a)), cssH: Math.round(cssH) };
+  }
+
+  /* aplica um novo tamanho SEM reiniciar a partida: reposiciona o que já existe */
+  applyLayout(lay, safeCss, touchUI, dpr) {
+    const oldOff = this.offX;
+    const widthChanged = lay.logicalW !== W;
+    W = lay.logicalW;
+    const d = this.offX - oldOff;
+    this.cssScale = lay.cssH / H;
+    this.pxScale = Math.max(0.75, Math.min(1.5, lay.cssH * Math.min(dpr || 1, 2) / H));
+    const pw = Math.round(W * this.pxScale), ph = Math.round(H * this.pxScale);
+    if (this.canvas.width !== pw) this.canvas.width = pw;
+    if (this.canvas.height !== ph) this.canvas.height = ph;
+    this.touchUI = !!touchUI;
+    this.hudK = Math.max(1, Math.min(2, 0.8 / this.cssScale));
+    const cs = this.cssScale;
+    this.safe = { l: safeCss.l / cs, r: safeCss.r / cs, t: safeCss.t / cs, b: safeCss.b / cs };
+    if (widthChanged) Game._floors = {};
+    if (d && this.items) {                       /* acompanha o deslocamento do campo central */
+      this.items.forEach(it => { it.x += d; });
+      this.particles.forEach(q => { q.x += d; });
+      this.floats.forEach(f => { f.x += d; });
+      BIN_ORDER.forEach(n => { this.binCur[n] += d; });
+      this.controlX += d; this.pointer.x += d;
+      if (this.seq) this.seq.x += d;
+    }
   }
 
   /* ---------- ciclo de vida ---------- */
@@ -36,7 +82,7 @@ class Game {
     this.player = { animT: 0, pose: 'idle', hurtT: 0, face: 1, speed: 560 };
     this.held = null;     /* item levantado pelo jogador (teclado) */
     this.slots = BIN_ORDER.slice();           /* ordem atual das lixeiras (rodízio) */
-    this.binCur = {}; BIN_ORDER.forEach((n, i) => { this.binCur[n] = BIN_X[i]; });
+    this.binCur = {}; BIN_ORDER.forEach((n, i) => { this.binCur[n] = BIN_X[i] + this.offX; });
     this.mt = 0; this.vx = 0;
     this.binV = {}; this.swapT = 0; this.learn = null; this.learnT = 0; this.turbA = 0;
     this.wind = { state: 'idle', t: 4.5, dir: 1 };
@@ -122,7 +168,7 @@ class Game {
     const river = this._has('river'), ice = this._has('ice');
     const drift = river ? Math.sin(this.mt * 0.7) * 85 : (ice ? Math.sin(this.mt * 0.55) * 26 : 0);
     BIN_ORDER.forEach((n, bi) => {
-      const tx = BIN_X[this.slots.indexOf(n)] + drift + (ice ? Math.sin(this.mt * 0.8 + bi * 1.9) * 10 : 0);
+      const tx = BIN_X[this.slots.indexOf(n)] + this.offX + drift + (ice ? Math.sin(this.mt * 0.8 + bi * 1.9) * 10 : 0);
       const old = this.binCur[n];
       this.binCur[n] += (tx - old) * Math.min(1, dt * (river ? 30 : (ice ? 2.6 : 7)));
       this.binV[n] = (this.binCur[n] - old) / Math.max(dt, 0.001);
@@ -137,7 +183,7 @@ class Game {
         this._msg(w.dir > 0 ? 'VENTO PARA A DIREITA  >>' : '<<  VENTO PARA A ESQUERDA', '#bfe9ff', 1.3);
       } else if (w.state === 'warn' && w.t <= 0) { w.state = 'blow'; w.t = 2.6; }
       else if (w.state === 'blow') {
-        for (const it of this.items) if (it.state === 'fall') it.x = Math.max(40, Math.min(W - 40, it.x + w.dir * 95 * dt));
+        for (const it of this.items) if (it.state === 'fall') it.x = Math.max(this.offX + 40, Math.min(this.offX + BASE_W - 40, it.x + w.dir * 95 * dt));
         if (w.t <= 0) { w.state = 'idle'; w.t = 6 + Math.random() * 3; }
       }
     }
@@ -179,7 +225,8 @@ class Game {
     if (this._has('ice')) this.vx += (move * this.player.speed - this.vx) * Math.min(1, dt * 2.2);   /* GELO: inércia */
     else this.vx = move * this.player.speed;
     this.controlX += this.vx * dt;
-    if (this.controlX < 60 || this.controlX > W - 60) { this.controlX = Math.max(60, Math.min(W - 60, this.controlX)); this.vx = 0; }
+    const cMin = this.offX + 60, cMax = this.offX + BASE_W - 60;
+    if (this.controlX < cMin || this.controlX > cMax) { this.controlX = Math.max(cMin, Math.min(cMax, this.controlX)); this.vx = 0; }
     const p = this.player;
     if (move !== 0) { p.animT += dt; p.face = move > 0 ? 1 : -1; p.pose = (Math.floor(p.animT * 8) % 2 === 0) ? 'run1' : 'run2'; }
     else { p.pose = 'idle'; p.animT = 0; }
@@ -188,7 +235,7 @@ class Game {
     this.spawnT -= dt;
     if (this.spawnT <= 0) {
       if (this.seq && this.seq.left > 0) {
-        this._spawn(this.seq.type, Math.max(90, Math.min(W - 90, this.seq.x + (Math.random() - 0.5) * 120)));
+        this._spawn(this.seq.type, Math.max(this.offX + 90, Math.min(this.offX + BASE_W - 90, this.seq.x + (Math.random() - 0.5) * 120)));
         this.seq.left--; this.spawnT = 0.5;
         if (this.seq.left <= 0) this.seq = null;
       } else {
@@ -254,7 +301,7 @@ class Game {
   _spawn(forceType, forceX) {
     const L = this.level;
     const roll = Math.random();
-    const x = forceX != null ? forceX : 90 + Math.random() * (W - 180);
+    const x = forceX != null ? forceX : this.offX + 90 + Math.random() * (BASE_W - 180);
     const [s0, s1] = L.speed;
     const vy = (s0 + Math.random() * (s1 - s0)) * this.diff.speed * this._ramp().speed;
     const base = { x, y: -50, vy, rot: Math.random() * 6.28, rotV: (Math.random() - 0.5) * 4, state: 'fall', depT: 0 };
@@ -334,7 +381,7 @@ class Game {
   pointerDown(x, y) {
     if (!this.running || this.paused || this.state !== 'play') return false;
     /* hit-test nos itens em queda */
-    let best = null, bd = 52;
+    let best = null, bd = Math.max(52, 30 / this.cssScale);
     for (const it of this.items) {
       if (it.state !== 'fall') continue;
       const d = Math.hypot(it.x - x, it.y - y);
@@ -498,7 +545,7 @@ class Game {
   _getFloor(id) {
     Game._floors = Game._floors || {};
     const th = Game.THEMES[id] || Game.THEMES[1];
-    const key = Game.THEMES[id] ? id : 1;
+    const key = (Game.THEMES[id] ? id : 1) + '_' + W;
     if (Game._floors[key]) return Game._floors[key];
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const c = cv.getContext('2d');
@@ -743,9 +790,14 @@ class Game {
   /* ---------- render ---------- */
   _render() {
     const c = this.ctx;
+    const ps = this.pxScale;
+    c.setTransform(ps, 0, 0, ps, 0, 0);       /* coordenadas lógicas (W x 720) → pixels reais */
     const bg = Sprites.bg(this.level.bg);
-    if (bg && bg.complete) c.drawImage(bg, 0, 0, W, H);
-    else { c.fillStyle = '#123'; c.fillRect(0, 0, W, H); }
+    if (bg && bg.complete && bg.width) {
+      /* fundo proporcional (cover): sem esticar; recorta só o excesso decorativo, mais por baixo (o piso cobre a base) */
+      const sc = Math.max(W / bg.width, H / bg.height), dw = bg.width * sc, dh = bg.height * sc;
+      c.drawImage(bg, (W - dw) / 2, -(dh - H) * 0.3, dw, dh);
+    } else { c.fillStyle = '#123'; c.fillRect(0, 0, W, H); }
     this._drawFloor(c);
     if (this._has('smog') && this.smog > 0) {            /* POLUIÇÃO: névoa descendo do topo */
       const sg = c.createLinearGradient(0, 0, 0, H * (0.45 + this.smog * 0.5));
@@ -841,6 +893,7 @@ class Game {
     c.globalAlpha = 1;
 
     this._drawHUD(c);
+    const my = Math.max(100, this.safe.t + 8 + 90 * this.hudK);   /* y das mensagens centrais */
 
     if (this.msgT > 0 && this.msg) {
       c.globalAlpha = Math.min(this.msgT, 1);
@@ -849,10 +902,10 @@ class Game {
       while (c.measureText(this.msg.text).width > W - 140 && fs > 16) { fs -= 2; c.font = '900 ' + fs + 'px Segoe UI, Arial'; }
       const tw = c.measureText(this.msg.text).width;
       c.fillStyle = 'rgba(4,24,13,.8)';
-      c.beginPath(); c.roundRect(W / 2 - tw / 2 - 22, 100, tw + 44, 50, 12); c.fill();
+      c.beginPath(); c.roundRect(W / 2 - tw / 2 - 22, my, tw + 44, 50, 12); c.fill();
       c.strokeStyle = 'rgba(150,255,110,.5)'; c.lineWidth = 2; c.stroke();
       c.fillStyle = this.msg.color;
-      c.fillText(this.msg.text, W / 2, 100 + 34);
+      c.fillText(this.msg.text, W / 2, my + 34);
       c.globalAlpha = 1;
     }
 
@@ -863,9 +916,9 @@ class Game {
       while (c.measureText(txt).width > W - 180 && fs > 14) { fs -= 1; c.font = '800 ' + fs + 'px Segoe UI, Arial'; }
       const tw = c.measureText(txt).width;
       c.fillStyle = 'rgba(8,40,62,.9)';
-      c.beginPath(); c.roundRect(W / 2 - tw / 2 - 20, 160, tw + 40, 44, 12); c.fill();
+      c.beginPath(); c.roundRect(W / 2 - tw / 2 - 20, my + 60, tw + 40, 44, 12); c.fill();
       c.strokeStyle = 'rgba(127,208,255,.7)'; c.lineWidth = 2; c.stroke();
-      c.fillStyle = '#e4f7ff'; c.textAlign = 'center'; c.fillText(txt, W / 2, 160 + 29);
+      c.fillStyle = '#e4f7ff'; c.textAlign = 'center'; c.fillText(txt, W / 2, my + 60 + 29);
       c.globalAlpha = 1;
     }
 
@@ -943,7 +996,7 @@ class Game {
   _drawBinInWater(c, img, bin, bx, bw, bh) {
     const t = this.mt, i = BIN_ORDER.indexOf(bin);
     const bob = Math.sin(t * 2.1 + i * 1.7) * 5;
-    const tilt = Math.sin(t * 1.6 + i * 2.3) * 0.045 + (this.binCur[bin] - BIN_X[this.slots.indexOf(bin)]) * 0.0006;
+    const tilt = Math.sin(t * 1.6 + i * 2.3) * 0.045 + (this.binCur[bin] - this.offX - BIN_X[this.slots.indexOf(bin)]) * 0.0006;
     const sink = 30;                                   /* quanto desce na água */
     const waterY = 660 + this._waveY(bx, t, 4);
     /* sombra na água */
@@ -960,7 +1013,7 @@ class Game {
     c.beginPath(); c.rect(bx - 150, waterY, 300, H - waterY); c.clip();
     c.translate(bx + Math.sin(t * 3 + i) * 2, 712 + sink + bob); c.rotate(tilt);
     c.globalAlpha = 0.85; c.drawImage(img, -bw / 2, -bh, bw, bh);
-    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.setTransform(this.pxScale, 0, 0, this.pxScale, 0, 0);
     const wg = c.createLinearGradient(0, waterY, 0, H);
     wg.addColorStop(0, 'rgba(47,159,196,.55)'); wg.addColorStop(1, 'rgba(8,60,92,.8)');
     c.globalAlpha = 1; c.fillStyle = wg; c.fillRect(bx - 150, waterY, 300, H - waterY);
@@ -996,7 +1049,7 @@ class Game {
     if (w.state === 'warn') {
       c.globalAlpha = 0.5 + Math.sin(t * 14) * 0.3;
       c.fillStyle = '#d8f2ff'; c.font = '900 64px Segoe UI, Arial'; c.textAlign = 'center';
-      c.fillText(w.dir > 0 ? '>>' : '<<', w.dir > 0 ? W - 90 : 90, 330);
+      c.fillText(w.dir > 0 ? '>>' : '<<', w.dir > 0 ? this.offX + BASE_W - 90 : this.offX + 90, 330);
     } else {
       c.strokeStyle = 'rgba(235,250,255,.55)'; c.lineWidth = 3; c.lineCap = 'round';
       for (let i = 0; i < 16; i++) {
@@ -1091,57 +1144,76 @@ class Game {
   }
 
   _drawHUD(c) {
-    const L = this.level;
+    const L = this.level, k = this.hudK, sf = this.safe;
+    const top = sf.t + 8, left = sf.l + 10, right = W - sf.r - 10;
+    const pauseW = 56 / this.cssScale;                 /* espaço do botão de pausa (DOM) */
+    const LW = 370, RW = 260;                          /* larguras (unidades do HUD) dos blocos laterais */
+
+    /* ---- bloco esquerdo: pontos, tempo, vidas, combo ---- */
+    c.save(); c.translate(left, top); c.scale(k, k);
     c.textAlign = 'left';
-    this._panel(c, 10, 10, 430, 46);
+    this._panel(c, 0, 0, LW, 46);
     c.font = '800 20px Segoe UI, Arial';
-    c.fillStyle = '#ffd54f'; c.fillText('PONTOS', 26, 40);
-    c.fillStyle = '#eaffea'; c.fillText(String(this.score).padStart(5, '0'), 116, 40);
-    c.fillStyle = '#8fd3ff'; c.fillText('TEMPO ' + this._fmt(this.timeLeft), 230, 40);
+    c.fillStyle = '#ffd54f'; c.fillText('PONTOS', 16, 30);
+    c.fillStyle = '#eaffea'; c.fillText(String(this.score).padStart(5, '0'), 106, 30);
+    c.fillStyle = '#8fd3ff'; c.fillText('TEMPO ' + this._fmt(this.timeLeft), 220, 30);
     for (let i = 0; i < this.diff.maxErrors; i++) {
       c.font = '20px Arial';
       c.fillStyle = i < this.diff.maxErrors - this.errors ? '#ff6b81' : '#3a3a3a';
-      c.fillText('♥', 30 + i * 26, 84);
+      c.fillText('♥', 20 + i * 26, 74);
     }
-    c.font = '800 18px Segoe UI, Arial'; c.textAlign = 'left';
-    if (this.combo > 1) { c.fillStyle = '#a5ffa5'; c.fillText('COMBO x' + this.combo, 30 + this.diff.maxErrors * 26 + 14, 84); }
-    if (this._has('chain') && this.chainN > 0) { c.fillStyle = '#ffe066'; c.fillText('SEQUÊNCIA ' + this.chainN + '/3', 230, 84); }
+    c.font = '800 18px Segoe UI, Arial';
+    if (this.combo > 1) { c.fillStyle = '#a5ffa5'; c.fillText('COMBO x' + this.combo, 20 + this.diff.maxErrors * 26 + 14, 74); }
+    let ey = 98;
+    c.font = '700 14px Segoe UI, Arial';
+    if (this._has('chain') && this.chainN > 0) { c.fillStyle = '#ffe066'; c.fillText('SEQUÊNCIA ' + this.chainN + '/3', 16, ey); ey += 20; }
+    if (this.effects.magnet > 0) { c.fillStyle = '#ffb3c0'; c.fillText('ÍMÃ ' + this.effects.magnet.toFixed(1) + 's', 16, ey); ey += 20; }
+    if (this.effects.eco > 0) { c.fillStyle = '#a5ffa5'; c.fillText('x2 ECOLÓGICO ' + this.effects.eco.toFixed(1) + 's', 16, ey); }
+    c.restore();
+
+    /* ---- bloco direito: fase, meta, mecânica, poluição (à esquerda do botão de pausa) ---- */
+    c.save(); c.translate(right - pauseW, top); c.scale(k, k);
     c.textAlign = 'right';
-    this._panel(c, W - 350, 10, 260, 46);
-    c.fillStyle = '#ffd54f'; c.font = '800 17px Segoe UI, Arial';
-    c.fillText('FASE ' + L.id + ' — ' + L.name, W - 100, 30);
+    this._panel(c, -RW, 0, RW, 46);
+    c.fillStyle = '#ffd54f';
+    const ttl = 'FASE ' + L.id + ' — ' + L.name;
+    let tf = 17; c.font = '800 ' + tf + 'px Segoe UI, Arial';
+    while (c.measureText(ttl).width > RW - 24 && tf > 11) { tf -= 1; c.font = '800 ' + tf + 'px Segoe UI, Arial'; }
+    c.fillText(ttl, -12, 20);
     c.fillStyle = '#bfe6bf'; c.font = '700 14px Segoe UI, Arial';
-    c.fillText('META: ' + this.hits + '/' + L.goal, W - 100, 50);
-    /* etiqueta da mecânica da fase + medidor de poluição */
-    c.textAlign = 'right'; c.font = '800 13px Segoe UI, Arial';
-    c.fillStyle = '#9fe6ff'; c.fillText('MECÂNICA: ' + (L.mechName || ''), W - 100, 76);
+    c.fillText('META: ' + this.hits + '/' + L.goal, -12, 40);
+    const mtx = 'MECÂNICA: ' + (L.mechName || '');
+    let mf = 13; c.font = '800 ' + mf + 'px Segoe UI, Arial';
+    while (c.measureText(mtx).width > RW - 12 && mf > 9) { mf -= 1; c.font = '800 ' + mf + 'px Segoe UI, Arial'; }
+    c.fillStyle = '#9fe6ff'; c.fillText(mtx, -12, 66);
     if (this._has('smog')) {
-      this._panel(c, W - 350, 84, 260, 18, 9);
+      this._panel(c, -RW, 74, RW, 18, 9);
       c.fillStyle = this.smog > 0.7 ? '#d65a3a' : this.smog > 0.4 ? '#d6b13a' : '#7acb5a';
-      c.beginPath(); c.roundRect(W - 346, 88, Math.max(2, 252 * this.smog), 10, 5); c.fill();
+      c.beginPath(); c.roundRect(-RW + 4, 78, Math.max(2, 252 * this.smog), 10, 5); c.fill();
       c.textAlign = 'left'; c.font = '800 11px Segoe UI, Arial'; c.fillStyle = '#eaffea';
-      c.fillText('POLUIÇÃO ' + Math.round(this.smog * 100) + '%', W - 342, 113);
+      c.fillText('POLUIÇÃO ' + Math.round(this.smog * 100) + '%', -RW + 8, 103);
     }
-    /* barra de progresso */
-    this._panel(c, W / 2 - 180, 12, 360, 24, 12);
+    c.restore();
+
+    /* ---- centro: barra de progresso + dica (largura se adapta ao espaço livre) ---- */
+    const leftEnd = left + LW * k + 12, rightStart = right - pauseW - RW * k - 12;
+    const half = Math.min(W / 2 - leftEnd, rightStart - W / 2);
+    const cw = Math.max(110, Math.min(360, (2 * half) / k));
+    c.save(); c.translate(W / 2, top); c.scale(k, k);
+    this._panel(c, -cw / 2, 0, cw, 24, 12);
     const pct = Math.min(this.hits / L.goal, 1);
-    if (pct > 0) { c.fillStyle = '#6fd356'; c.beginPath(); c.roundRect(W / 2 - 176, 16, 352 * pct, 16, 8); c.fill(); }
-    /* efeitos ativos */
-    c.textAlign = 'left'; c.font = '700 14px Segoe UI, Arial';
-    let ey = 108;
-    if (this.effects.magnet > 0) { c.fillStyle = '#ffb3c0'; c.fillText('ÍMÃ ' + this.effects.magnet.toFixed(1) + 's', 26, ey); ey += 20; }
-    if (this.effects.eco > 0) { c.fillStyle = '#a5ffa5'; c.fillText('x2 ECOLÓGICO ' + this.effects.eco.toFixed(1) + 's', 26, ey); }
-    /* dica contextual */
+    if (pct > 0) { c.fillStyle = '#6fd356'; c.beginPath(); c.roundRect(-cw / 2 + 4, 4, (cw - 8) * pct, 16, 8); c.fill(); }
     c.textAlign = 'center'; c.font = '700 14px Segoe UI, Arial';
     let hint;
     if (this.held) hint = 'ESPAÇO solta na lixeira';
     else if (this.dragged) hint = 'Solte sobre a lixeira!';
-    else hint = 'ARRASTE o resíduo até a lixeira  •  ou ← → + ESPAÇO';
-    c.fillStyle = 'rgba(6,26,13,.75)';
+    else hint = this.touchUI ? 'ARRASTE o resíduo até a lixeira' : 'ARRASTE o resíduo até a lixeira  •  ou ← → + ESPAÇO';
     const hw = c.measureText(hint).width;
-    c.beginPath(); c.roundRect(W / 2 - hw / 2 - 14, 44, hw + 28, 26, 10); c.fill();
+    c.fillStyle = 'rgba(6,26,13,.75)';
+    c.beginPath(); c.roundRect(-hw / 2 - 14, 54, hw + 28, 26, 10); c.fill();
     c.fillStyle = '#d6ff8a';
-    c.fillText(hint, W / 2, 62);
+    c.fillText(hint, 0, 72);
+    c.restore();
   }
 
   _panel(c, x, y, w, h, r = 12) {

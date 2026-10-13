@@ -2,7 +2,12 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d2418">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Reciclagem Crisoverde">
 <title>Operação Reciclagem Crisoverde</title>
 <link rel="stylesheet" href="style/style.css">
 </head>
@@ -90,11 +95,24 @@
   <section id="screen-game" class="screen">
     <div id="game-wrap">
       <canvas id="game-canvas" width="1280" height="720"></canvas>
-      <button id="btn-pause-dom" class="btn btn-pause-dom" title="Pausar (P)">&#10074;&#10074;</button>
-      <div id="mobile-controls">
-        <button id="mc-left" class="mc-btn">&#9664;</button>
-        <button id="mc-drop" class="mc-btn mc-drop">&#8681;</button>
-        <button id="mc-right" class="mc-btn">&#9654;</button>
+    </div>
+    <button id="btn-pause-dom" class="btn btn-pause-dom" title="Pausar (P)" aria-label="Pausar">&#10074;&#10074;</button>
+    <div id="mobile-controls">
+      <div class="mc-group mc-left">
+        <button id="mc-left" class="mc-btn" aria-label="Mover para a esquerda">&#9664;</button>
+        <button id="mc-right" class="mc-btn" aria-label="Mover para a direita">&#9654;</button>
+      </div>
+      <div class="mc-group mc-right">
+        <button id="mc-drop" class="mc-btn mc-drop" aria-label="Pegar ou soltar resíduo">&#8681;</button>
+      </div>
+    </div>
+    <!-- aviso para girar o aparelho (celular/tablet na vertical) -->
+    <div id="rotate-overlay">
+      <div class="rot-card">
+        <div class="rot-phone"><span></span></div>
+        <h2>GIRE O CELULAR</h2>
+        <p>Deite o aparelho na <b>horizontal</b> para jogar.<br>Sua partida fica pausada e continua de onde parou.</p>
+        <button id="btn-rotate-quit" class="btn btn-small">&#8962; SAIR PARA AS FASES</button>
       </div>
     </div>
   </section>

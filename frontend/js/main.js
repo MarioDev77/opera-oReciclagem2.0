@@ -17,7 +17,8 @@
 
   Storage.load();
   AudioFX.enabled = Storage.settings.sound;
-  if ('ontouchstart' in window) document.body.classList.add('touch');
+  if ('ontouchstart' in window || navigator.maxTouchPoints > 0 || (window.matchMedia && matchMedia('(pointer:coarse)').matches)) document.body.classList.add('touch');
+  const IS_TOUCH = document.body.classList.contains('touch');
 
   let currentScreen = 'menu';
   let difficulty = 'medium';
@@ -31,12 +32,84 @@
     $('#screen-' + name).classList.add('active');
     currentScreen = name;
     if (name !== 'game') $('#overlay-pause').classList.remove('active');
+    applyLayout();
   }
 
-  function toggleFullscreen() {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else document.documentElement.requestFullscreen().catch(() => {});
+  /* ---------- layout responsivo: ocupa toda a área visível ---------- */
+  const rootStyle = document.documentElement.style;
+  const wrapEl = $('#game-wrap');
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
+    'padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+  document.body.appendChild(probe);
+  let curLayout = null, curSafe = { l: 0, r: 0, t: 0, b: 0 };
+  let autoPaused = false, layoutRaf = 0;
+
+  function applyLayout() {
+    const vw = Math.max(1, window.innerWidth || document.documentElement.clientWidth);
+    const vh = Math.max(1, window.innerHeight || document.documentElement.clientHeight);
+    rootStyle.setProperty('--app-w', vw + 'px');
+    rootStyle.setProperty('--app-h', vh + 'px');
+    const lay = Game.computeLayout(vw, vh);
+    wrapEl.style.setProperty('--gw', lay.cssW + 'px');
+    wrapEl.style.setProperty('--gh', lay.cssH + 'px');
+    /* áreas seguras (notch / barra home), descontando as barras pretas do próprio jogo */
+    const cs = getComputedStyle(probe), mx = (vw - lay.cssW) / 2, my = (vh - lay.cssH) / 2;
+    curSafe = {
+      t: Math.max(0, (parseFloat(cs.paddingTop) || 0) - my), r: Math.max(0, (parseFloat(cs.paddingRight) || 0) - mx),
+      b: Math.max(0, (parseFloat(cs.paddingBottom) || 0) - my), l: Math.max(0, (parseFloat(cs.paddingLeft) || 0) - mx),
+    };
+    /* tamanhos dos botões proporcionais à altura (mín. 44 px de toque) */
+    rootStyle.setProperty('--mc', Math.max(48, Math.min(80, Math.round(lay.cssH * 0.17))) + 'px');
+    rootStyle.setProperty('--pause', Math.max(44, Math.min(56, Math.round(lay.cssH * 0.12))) + 'px');
+    curLayout = lay;
+    if (game) game.applyLayout(lay, curSafe, IS_TOUCH, window.devicePixelRatio);
+    updateOrientation(vw, vh);
   }
+
+  /* celular/tablet na vertical durante a partida → pede para girar e pausa sem perder o progresso */
+  function updateOrientation(vw, vh) {
+    const need = IS_TOUCH && currentScreen === 'game' && vh > vw;
+    document.body.classList.toggle('need-rotate', need);
+    if (need) {
+      releaseTouchControls();
+      if (game && game.running && !game.paused && game.state === 'play') { game.togglePause(true); autoPaused = true; }
+    } else if (autoPaused) {
+      autoPaused = false;
+      if (game && game.running && game.paused && !$('#overlay-pause').classList.contains('active')) game.togglePause(false);
+    }
+  }
+
+  function scheduleLayout() {
+    if (layoutRaf) return;
+    layoutRaf = requestAnimationFrame(() => { layoutRaf = 0; applyLayout(); });
+  }
+  window.addEventListener('resize', scheduleLayout);
+  window.addEventListener('orientationchange', () => { scheduleLayout(); setTimeout(applyLayout, 150); setTimeout(applyLayout, 450); });
+  window.addEventListener('pageshow', scheduleLayout);
+  document.addEventListener('fullscreenchange', scheduleLayout);
+  document.addEventListener('webkitfullscreenchange', scheduleLayout);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', scheduleLayout);
+
+  /* evita zoom/rolagem acidentais durante a partida (sem bloquear os painéis) */
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(n => document.addEventListener(n, e => e.preventDefault()));
+  document.addEventListener('touchmove', e => {
+    if (currentScreen === 'game' && !e.target.closest('.panel, #rotate-overlay')) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('contextmenu', e => { if (currentScreen === 'game') e.preventDefault(); });
+
+  const fsRoot = document.documentElement;
+  const fsReq = fsRoot.requestFullscreen || fsRoot.webkitRequestFullscreen;
+  function toggleFullscreen() {
+    if (!fsReq) return;
+    const active = document.fullscreenElement || document.webkitFullscreenElement;
+    if (active) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    const r = fsReq.call(fsRoot);
+    const lock = () => { if (IS_TOUCH && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); };
+    if (r && r.then) r.then(lock).catch(() => {}); else lock();
+  }
+  /* iPhone/Safari não oferece tela cheia para páginas: esconde o botão em vez de deixá-lo morto */
+  if (!fsReq) $('#btn-fullscreen').style.display = 'none';
 
   /* selo de modo teste */
   if (TEST_MODE.unlockAll) {
@@ -69,8 +142,12 @@
   function startGame(levelIndex) {
     if (game) game.stop();
     game = new Game($('#game-canvas'), onGameEnd);
+    touchDir.l = touchDir.r = false; autoPaused = false;
+    document.querySelectorAll('.mc-btn.active').forEach(b => b.classList.remove('active'));
+    game.applyLayout(curLayout || Game.computeLayout(window.innerWidth, window.innerHeight), curSafe, IS_TOUCH, window.devicePixelRatio);
     show('game');
     game.start(levelIndex, difficulty);
+    applyLayout();
   }
 
   function onGameEnd(result) {
@@ -207,6 +284,10 @@
     $('#overlay-pause').classList.remove('active');
     if (game) startGame(game.levelIndex);
   });
+  $('#btn-rotate-quit').addEventListener('click', () => {
+    if (game) game.stop();
+    autoPaused = false; renderLevels(); show('levels');
+  });
   $('#btn-quit').addEventListener('click', () => {
     if (game) game.stop();
     $('#overlay-pause').classList.remove('active');
@@ -240,51 +321,79 @@
     if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (!game.paused && !e.repeat) game.drop(); }
   });
 
-  /* ---------- controles móveis ---------- */
-  function bindHold(id, fn) {
+  /* ---------- controles móveis (pointer events: toque, caneta e mouse) ---------- */
+  const touchDir = { l: false, r: false };
+  const releasers = [];
+  function syncMove() { if (game) game._touchMove = (touchDir.r ? 1 : 0) - (touchDir.l ? 1 : 0); }
+  function bindHold(id, onChange) {
     const el = $(id);
-    const start = e => { e.preventDefault(); fn(1); };
-    const end = e => { e.preventDefault(); fn(0); };
-    el.addEventListener('touchstart', start, { passive: false });
-    el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
-    el.addEventListener('mousedown', start);
-    el.addEventListener('mouseup', end); el.addEventListener('mouseleave', end);
+    let pid = null;
+    const press = e => {
+      if (pid !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      pid = e.pointerId;
+      try { el.setPointerCapture(pid); } catch (_) {}
+      el.classList.add('active');
+      onChange(true);
+      e.preventDefault();
+    };
+    const release = e => {
+      if (e && e.pointerId !== pid) return;
+      if (pid === null) return;
+      pid = null;
+      el.classList.remove('active');
+      onChange(false);
+    };
+    el.addEventListener('pointerdown', press);
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(n => el.addEventListener(n, release));
+    releasers.push(() => release(null));
   }
-  bindHold('#mc-left', v => { if (game) game._touchMove = v ? -1 : (game._touchMove === -1 ? 0 : game._touchMove); });
-  bindHold('#mc-right', v => { if (game) game._touchMove = v ? 1 : (game._touchMove === 1 ? 0 : game._touchMove); });
-  bindHold('#mc-drop', v => { if (v && game) game.drop(); });
+  function releaseTouchControls() { releasers.forEach(r => r()); touchDir.l = touchDir.r = false; syncMove(); }
+  bindHold('#mc-left', v => { touchDir.l = v; syncMove(); });
+  bindHold('#mc-right', v => { touchDir.r = v; syncMove(); });
+  bindHold('#mc-drop', v => { if (v && game && !game.paused) game.drop(); });
 
+  /* perda de foco / app em segundo plano: solta botões e pausa a partida */
+  window.addEventListener('blur', () => { releaseTouchControls(); if (game) game.keys = {}; });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      releaseTouchControls(); if (game) game.keys = {};
+      if (currentScreen === 'game' && game && game.running && !game.paused && game.state === 'play') pauseGame(true);
+    }
+  });
 
-  /* ---------- arrastar e soltar no canvas (mouse / toque) ---------- */
+  /* ---------- arrastar e soltar no canvas (mouse / dedo) ---------- */
   const cv = $('#game-canvas');
+  let dragPid = null;
   function canvasPos(e) {
     const r = cv.getBoundingClientRect();
-    const src = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
-    return { x: (src.clientX - r.left) * (1280 / r.width), y: (src.clientY - r.top) * (720 / r.height) };
+    return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) };
   }
-  function onDown(e) {
-    if (!game || currentScreen !== 'game') return;
+  cv.addEventListener('pointerdown', e => {
+    if (!game || currentScreen !== 'game' || dragPid !== null) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     const p = canvasPos(e);
-    if (game.pointerDown(p.x, p.y)) e.preventDefault();
-  }
-  function onMove(e) {
-    if (!game || currentScreen !== 'game') return;
+    if (game.pointerDown(p.x, p.y)) {
+      dragPid = e.pointerId;
+      try { cv.setPointerCapture(dragPid); } catch (_) {}
+      e.preventDefault();
+    }
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!game || e.pointerId !== dragPid) return;
     const p = canvasPos(e);
     game.pointerMove(p.x, p.y);
-    if (game.dragged) e.preventDefault();
-  }
-  function onUp(e) {
+    e.preventDefault();
+  });
+  const endDrag = cancel => e => {
+    if (e.pointerId !== dragPid) return;
+    dragPid = null;
     if (!game || currentScreen !== 'game') return;
     const p = canvasPos(e);
-    game.pointerUp(p.x, p.y);
-  }
-  cv.addEventListener('mousedown', onDown);
-  window.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup', onUp);
-  cv.addEventListener('touchstart', onDown, { passive: false });
-  cv.addEventListener('touchmove', onMove, { passive: false });
-  cv.addEventListener('touchend', onUp);
-  cv.addEventListener('touchcancel', onUp);
+    game.pointerUp(p.x, cancel ? -9999 : p.y);       /* cancelado: o resíduo volta a cair */
+  };
+  cv.addEventListener('pointerup', endDrag(false));
+  cv.addEventListener('pointercancel', endDrag(true));
+  cv.addEventListener('lostpointercapture', e => { if (e.pointerId === dragPid) endDrag(true)(e); });
   cv.style.touchAction = 'none';
 
   /* ---------- carregamento ---------- */
@@ -293,4 +402,5 @@
   };
   Sprites.loadAll();
   show('menu');
+  applyLayout();
 })();

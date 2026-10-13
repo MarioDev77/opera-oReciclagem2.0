@@ -3,9 +3,17 @@
   --yellow:#ffd54f; --dark:#0d2418; --panel:#123822;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;background:var(--dark);font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;}
-#app{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
-.screen{display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;}
+html,body{width:100%;height:100%;background:var(--dark);font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;
+  overscroll-behavior:none;-webkit-text-size-adjust:100%;text-size-adjust:100%;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+body{position:fixed;inset:0;}
+input{-webkit-user-select:text;user-select:text;}
+button{touch-action:manipulation;font-family:inherit;}
+/* #app acompanha a área realmente visível (JS define --app-w/--app-h; dvh/vh são só alternativas) */
+#app{position:fixed;left:0;top:0;width:var(--app-w,100vw);height:var(--app-h,100vh);display:flex;align-items:center;justify-content:center;}
+@supports (height:100dvh){#app{width:var(--app-w,100dvw);height:var(--app-h,100dvh);}}
+.screen{display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);}
 .screen.active{display:flex;}
 
 /* ---------- fundo menu ---------- */
@@ -94,16 +102,39 @@ html,body{height:100%;background:var(--dark);font-family:'Segoe UI',Arial,sans-s
 .howto-bins img{width:44px;}
 
 /* ---------- jogo ---------- */
-#screen-game{background:#000;}
-#game-wrap{position:relative;width:min(100vw,177.78vh);aspect-ratio:16/9;}
-#game-canvas{width:100%;height:100%;display:block;border-radius:6px;box-shadow:0 0 40px rgba(0,0,0,.8);}
-.btn-pause-dom{position:absolute;top:10px;right:10px;padding:8px 14px;font-size:16px;z-index:5;opacity:.9;}
-#mobile-controls{position:absolute;bottom:8px;left:0;right:0;display:none;justify-content:space-between;
-  padding:0 14px;pointer-events:none;}
-#mobile-controls .mc-btn{pointer-events:auto;width:74px;height:74px;border-radius:50%;border:2px solid rgba(180,255,180,.5);
-  background:rgba(20,60,30,.65);color:#d8ffd8;font-size:30px;box-shadow:0 4px 12px rgba(0,0,0,.6);}
-#mobile-controls .mc-drop{background:rgba(120,160,30,.65);}
-body.touch #mobile-controls{display:flex;}
+#screen-game{background:#000;padding:0;touch-action:none;overflow:hidden;}
+/* o tamanho do jogo (--gw/--gh) é calculado em JS a partir da área visível; sem altura/largura fixas */
+#game-wrap{position:relative;flex:none;width:var(--gw,min(100vw,177.78vh));height:var(--gh,min(56.25vw,100vh));}
+#game-canvas{width:100%;height:100%;display:block;touch-action:none;}
+.btn-pause-dom{position:absolute;z-index:6;
+  top:calc(env(safe-area-inset-top,0px) + 8px);right:calc(env(safe-area-inset-right,0px) + 8px);
+  width:var(--pause,48px);height:var(--pause,48px);padding:0;border-radius:14px;
+  display:flex;align-items:center;justify-content:center;font-size:18px;letter-spacing:0;opacity:.92;}
+/* controles de toque: polegar esquerdo (◀ ▶) e direito (pegar/soltar), nas laterais, fora das lixeiras */
+#mobile-controls{position:absolute;inset:0;display:none;pointer-events:none;z-index:6;}
+body.touch #mobile-controls{display:block;}
+.mc-group{position:absolute;display:flex;gap:calc(var(--mc,56px)*.18);pointer-events:none;
+  bottom:calc(env(safe-area-inset-bottom,0px) + 10px);}
+.mc-left{left:calc(env(safe-area-inset-left,0px) + 12px);}
+.mc-right{right:calc(env(safe-area-inset-right,0px) + 12px);}
+#mobile-controls .mc-btn{pointer-events:auto;touch-action:none;width:var(--mc,56px);height:var(--mc,56px);min-width:44px;min-height:44px;
+  border-radius:50%;border:2px solid rgba(180,255,180,.55);padding:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(20,60,30,.6);color:#d8ffd8;font-size:calc(var(--mc,56px)*.42);box-shadow:0 4px 12px rgba(0,0,0,.55);
+  -webkit-user-select:none;user-select:none;transition:transform .05s,background .05s;}
+#mobile-controls .mc-drop{background:rgba(120,160,30,.62);width:calc(var(--mc,56px)*1.25);height:calc(var(--mc,56px)*1.25);}
+#mobile-controls .mc-btn.active{transform:scale(.9);background:rgba(120,220,90,.85);border-color:#eaffd0;color:#10300f;}
+
+/* ---------- aviso: gire o aparelho ---------- */
+#rotate-overlay{display:none;position:absolute;inset:0;z-index:30;align-items:center;justify-content:center;text-align:center;
+  background:radial-gradient(ellipse at center,#14452a 0%,#07170e 80%);color:#eaffea;padding:24px;}
+body.need-rotate #rotate-overlay{display:flex;}
+.rot-card{display:flex;flex-direction:column;align-items:center;gap:16px;max-width:360px;}
+.rot-card h2{color:var(--yellow);letter-spacing:4px;font-size:26px;text-shadow:0 3px 0 rgba(0,0,0,.5);}
+.rot-card p{color:#cfe8cf;font-size:15px;line-height:1.5;}
+.rot-phone{width:64px;height:112px;border:5px solid #b6ff7a;border-radius:14px;position:relative;
+  box-shadow:0 0 22px rgba(130,255,80,.5);animation:rotPhone 2.4s ease-in-out infinite;}
+.rot-phone span{position:absolute;left:50%;bottom:7px;width:18px;height:4px;margin-left:-9px;border-radius:2px;background:#b6ff7a;}
+@keyframes rotPhone{0%,15%{transform:rotate(0)}55%,80%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
 
 /* ---------- overlay pausa ---------- */
 .overlay{display:none;position:absolute;inset:0;background:rgba(3,12,6,.78);z-index:20;
@@ -174,3 +205,26 @@ body.touch #mobile-controls{display:flex;}
 
 .res-fact{width:100%;margin:0;padding:10px 14px;border-radius:12px;background:rgba(20,70,90,.55);border:1px solid rgba(127,208,255,.45);color:#dff6ff;font-size:14px;line-height:1.4;text-align:left;}
 .res-fact:empty{display:none;}
+
+/* ---------- celular na horizontal: painéis compactos (pausa, resultados, fases) ---------- */
+@media (max-height:520px){
+  .pause-panel{padding:12px 22px;gap:8px;min-width:min(70vw,300px);}
+  .pause-panel .btn{padding:8px 14px;font-size:14px;}
+  .pause-panel .btn-big{padding:8px 30px;font-size:16px;}
+  .panel-title{font-size:20px;}
+  .stars{font-size:30px;}
+  .res-stat b{font-size:17px;}
+  .res-stat{padding:6px;}
+  .panel{max-height:calc(100% - 8px);}
+  .levels-grid{grid-template-columns:repeat(3,1fr);gap:8px;}
+  .level-card img{height:56px;}
+  .rot-card h2{font-size:20px;}
+}
+@media (max-height:520px) and (min-width:700px){.levels-grid{grid-template-columns:repeat(5,1fr);}}
+@media (max-height:420px){
+  #screen-levels .panel-sub{display:none;}
+  #screen-levels .level-card img{height:38px;}
+  #screen-levels .level-card .lvl-name{font-size:11px;padding:3px 2px;}
+  #screen-levels .btn-back{margin-top:4px;padding:6px 18px;font-size:13px;}
+  #screen-levels .panel{gap:6px;padding:10px 16px;}
+}
